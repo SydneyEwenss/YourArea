@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>YourArea</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body>
+  <nav class="navbar navbar-expand-lg navbar-light bg-light shadow-sm fixed-top">
+    <div class="container-fluid">
+      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+        <span class="navbar-toggler-icon"></span>
+      </button>
+
+      <div class="collapse navbar-collapse" id="navbarNav">
+        <a href="{% url 'home' %}"><h2>YourArea</h2></a>
+        <ul class="navbar-nav me-auto">
+          <li class="nav-item"><a href="{% url 'home' %}" class="nav-link">Home</a></li>
+              <li class="nav-item"><a href="{% url 'search' %}" class="nav-link">Search</a></li>
+              <li class="nav-item"><a href="{% url 'notifications' %}" class="nav-link">Notifications <span class="badge bg-danger">{{ unread_notifications_count }}</span></a></li>
+              <li class="nav-item"><a href="{% url 'groups_list' %}" class="nav-link">Groups</a></li>
+              <li class="nav-item"><a href="{% url 'areas_list' %}" class="nav-link">Areas</a></li>
+              {% if user.is_authenticated %}
+              <li class="nav-item"><a href="{% url 'area' request.user.username %}" class="nav-link">{{user.username}}</a></li>
+              {% else %}
+                <li class="nav-item"><a href="{% url 'login' %}" class="nav-link">Login</a></li>
+                <li class="nav-item"><a href="{% url 'register' %}" class="nav-link">Register</a></li>
+              {% endif %}
+        </ul>
+      </div>
+    </div>
+  </nav>
+
+  <!-- The content block without container restriction -->
+  {% block content %}
+  {% endblock %}
+
+  <div aria-live="polite" aria-atomic="true" class="position-relative">
+    <!-- Toast Container -->
+    <div class="toast-container position-fixed top-0 end-0 p-3">
+        {% if messages %}
+            {% for message in messages %}
+                <div class="toast align-items-center text-bg-{{ message.tags }} border-0" role="alert" aria-live="assertive" aria-atomic="true" data-bs-delay="5000" data-bs-autohide="true">
+                    <div class="d-flex">
+                        <div class="toast-body">
+                            {{ message }}
+                        </div>
+                        <button type="button" class="btn-close me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+                    </div>
+                </div>
+            {% endfor %}
+        {% endif %}
+    </div>
+</div>
+
+  <!-- Bootstrap JS Bundle -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="https://kit.fontawesome.com/94af182a5a.js" crossorigin="anonymous"></script>
+  <script>
+    // Initialize all toasts on page load
+    document.addEventListener('DOMContentLoaded', function () {
+        const toastElList = [].slice.call(document.querySelectorAll('.toast'));
+        const toastList = toastElList.map(function (toastEl) {
+            return new bootstrap.Toast(toastEl);
+        });
+
+        // Automatically show all toasts
+        toastList.forEach(toast => toast.show());
+    });
+</script>
+</body>
+</html>

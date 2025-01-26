@@ -1,0 +1,49 @@
+{% extends 'base.html' %}
+
+{% block content %}
+
+    {% if profiles %}
+        {% for profile in profiles %}
+        <a href="{% url 'area' profile.user.username %}">
+            <div class="card mb-3">
+                <div class="row g-0">
+                <div class="col-md-4 profile-img-container">
+                    <img src="{% if profile.profile_image %}{{ profile.profile_image.url }}{% else %}https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQpzxSFAvJKwKCA3D8by93pnQMYKpKigJJQ4A&s{% endif %}" class="img-fluid rounded-start profile-img" alt="Profile Image">
+                </div>
+                <div class="col-md-8">
+                    <div class="card-body">
+                        {% if profile.display_name %}
+                            <h5 class="card-title">{{profile.display_name}}</h5>
+                        {% else %}
+                            <h5 class="card-title">{{profile.user.username}}</h5>
+                        {% endif %}
+                        <h6 class="card-subtitle mb-2 text-muted">@{{ profile.user.username }}</h6>
+                    </div>
+                </div>
+                </div>
+            </div>
+        </a>
+        {% endfor %}
+    {% else %}
+        <p>No profiles found.</p>
+    {% endif %}
+
+    <style>
+        .profile-img-container {
+            width: 100px;
+            height: 100px;
+            overflow: hidden;
+            border-radius: 10%;
+            margin-right: 10px;
+            background-color: #f2f2f2;
+            margin: 15px;
+        }
+
+        .profile-img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+    </style>
+
+{% endblock %}

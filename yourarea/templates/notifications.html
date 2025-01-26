@@ -1,0 +1,90 @@
+{% extends 'base.html' %}
+
+{% block content %}
+    <h2 class="mb-4">Notifications</h2>
+
+    <!-- Tabs Navigation -->
+    <ul class="nav nav-tabs" id="notificationsTab" role="tablist">
+        <li class="nav-item" role="presentation">
+            <button class="nav-link active" id="unread-tab" data-bs-toggle="tab" data-bs-target="#unread" type="button" role="tab" aria-controls="unread" aria-selected="true">
+                Unread <span class="badge bg-danger">{{ unread_notifications_count }}</span>
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="read-tab" data-bs-toggle="tab" data-bs-target="#read" type="button" role="tab" aria-controls="read" aria-selected="false">
+                Read
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="action-required-tab" data-bs-toggle="tab" data-bs-target="#action-required" type="button" role="tab" aria-controls="action-required" aria-selected="false">
+                Action Required
+            </button>
+        </li>
+    </ul>
+
+    <!-- Tab Content -->
+    <div class="tab-content mt-3" id="notificationsTabContent">
+        <!-- Unread Notifications -->
+        <div class="tab-pane fade show active" id="unread" role="tabpanel" aria-labelledby="unread-tab">
+            {% if unread_notifications %}
+                {% for notification in unread_notifications %}
+                <div class="card mb-3">
+                    <div class="card-body">
+                        <p class="mb-1"><strong>{{ notification.title }}</strong></p>
+                        <p class="mb-2 text-muted">{{ notification.message }}</p>
+                        <div class="d-flex justify-content-between">
+                            <small class="text-muted">{{ notification.timestamp|date:"d M Y, H:i" }}</small>
+                            <div>
+                                <a href="{% url 'mark_as_read' notification.id %}" class="btn btn-sm btn-outline-success">Mark as Read</a>
+                                <a href="{% url 'delete_notification' notification.id %}" class="btn btn-sm btn-outline-danger">Delete</a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            {% else %}
+                <p class="text-muted">No unread notifications.</p>
+            {% endif %}
+        </div>
+
+        <!-- Read Notifications -->
+        <div class="tab-pane fade" id="read" role="tabpanel" aria-labelledby="read-tab">
+            {% if read_notifications %}
+                {% for notification in read_notifications %}
+                <div class="card mb-3">
+                    <div class="card-body">
+                        <p class="mb-1"><strong>{{ notification.title }}</strong></p>
+                        <p class="mb-2 text-muted">{{ notification.message }}</p>
+                        <div class="d-flex justify-content-between">
+                            <small class="text-muted">{{ notification.timestamp|date:"d M Y, H:i" }}</small>
+                            <a href="{% url 'delete_notification' notification.id %}" class="btn btn-sm btn-outline-danger">Delete</a>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            {% else %}
+                <p class="text-muted">No read notifications.</p>
+            {% endif %}
+        </div>
+
+        <!-- Action Required Notifications -->
+        <div class="tab-pane fade" id="action-required" role="tabpanel" aria-labelledby="action-required-tab">
+            {% if action_required_notifications %}
+                {% for notification in action_required_notifications %}
+                <div class="card mb-3">
+                    <div class="card-body">
+                        <p class="mb-1"><strong>{{ notification.title }}</strong></p>
+                        <p class="mb-2 text-muted">{{ notification.message }}</p>
+                        <div class="d-flex justify-content-between">
+                            <small class="text-muted">{{ notification.timestamp|date:"d M Y, H:i" }}</small>
+                            <a href="{{ notification.action_url }}" class="btn btn-sm btn-primary">Take Action</a>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            {% else %}
+                <p class="text-muted">No action required notifications.</p>
+            {% endif %}
+        </div>
+    </div>
+{% endblock %}

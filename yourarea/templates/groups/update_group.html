@@ -1,0 +1,18 @@
+{% extends 'base.html' %}
+
+{% block content %}
+
+    <h1>Update Group</h1>
+    <br>
+    <form method="POST" action="" enctype="multipart/form-data">
+        {% csrf_token %}
+        {{ form.as_p }}
+        <button type="submit" class="btn btn-secondary">Update</button>
+    </form>
+    <br>
+    <form method="POST" class="d-inline">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-danger" name="delete_group">Delete Group</button>
+    </form>
+
+{% endblock %}
