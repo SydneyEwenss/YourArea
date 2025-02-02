@@ -40,6 +40,8 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'yourarea',
+    'imagekit',
+    'channels',
 ]
 
 MIDDLEWARE = [
@@ -66,6 +68,8 @@ TEMPLATES = [
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
                 'yourarea.context_processors.notifications',
+                'yourarea.context_processors.sidebar_events',
+                'yourarea.context_processors.post_form',
             ],
         },
     },
@@ -140,4 +144,25 @@ MESSAGE_TAGS = {
     messages.SUCCESS: 'success',
     messages.WARNING: 'warning',
     messages.ERROR: 'danger',
+}
+
+MAX_UPLOAD_SIZE = 10 * 1024 * 1024
+
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'handlers': {
+        'file': {
+            'level': 'ERROR',
+            'class': 'logging.FileHandler',
+            'filename': 'error.log',
+        },
+    },
+    'loggers': {
+        'django': {
+            'handlers': ['file'],
+            'level': 'ERROR',
+            'propagate': True,
+        },
+    },
 }

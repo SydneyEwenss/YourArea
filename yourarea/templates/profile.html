@@ -1,4 +1,5 @@
 {% extends 'navbar.html' %}
+{% load custom_filters %}
 
 {% block content %}
     {% if profile %}
@@ -15,16 +16,16 @@
             <div class="card shadow-sm" style="background-color: rgba(255, 255, 255, 0.9); border-radius: 15px; overflow: hidden;">
                 <div class="card-body" style="position: relative;">
                     <!-- Profile Header -->
-                    <div class="d-flex align-items-center mb-4">
-                        <!-- Profile Image (Square with Rounded Corners) -->
+                    <div class="d-flex flex-column flex-md-row align-items-start align-items-md-center mb-4">
+                        <!-- Profile Image -->
                         <img 
                             src="{% if profile.profile_image %}{{ profile.profile_image.url }}{% else %}https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQpzxSFAvJKwKCA3D8by93pnQMYKpKigJJQ4A&s{% endif %}" 
                             alt="Profile picture" 
-                            class="me-3" 
+                            class="me-3 mb-3 mb-md-0" 
                             style="width: 150px; height: 150px; object-fit: cover; border-radius: 12px; border: 2px solid white;">
                         
-                        <!-- Display Name and Username -->
-                        <div>
+                        <!-- Profile Information -->
+                        <div class="flex-grow-1">
                             <h2 class="mb-0">{{ profile.display_name|default:profile.user.username }}</h2>
                             <p class="text-muted mb-1">@{{ profile.user.username }}</p>
 
@@ -33,26 +34,29 @@
                             <p class="text-muted mb-0">{{ profile.pronouns }}</p>
                             {% endif %}
 
+                            <!-- Followers/Following -->
                             <p class="text-muted mb-0">
-                                <a href="{% url 'followers' profile.user.id %}">{{ profile.follows.count }} Following</a> | <a href="{% url 'following' profile.user.id %}">{{ profile.followed_by.count }} Followers</a>
+                                <a href="{% url 'followers' profile.user.id %}">{{ profile.follows.count }} Following</a> | 
+                                <a href="{% url 'following' profile.user.id %}">{{ profile.followed_by.count }} Followers</a>
                             </p>
                         </div>
 
-                        <!-- Follow/Edit Buttons -->
-                        <div class="ms-auto">
-                            <form method="POST" class="d-inline">
+                        <!-- Buttons (Responsive) -->
+                        <div class="mt-3 mt-md-0 ms-auto w-100 w-md-auto d-flex flex-column flex-md-row">
+                            <form method="POST" class="mb-2 mb-md-0 me-md-2 w-100">
                                 {% csrf_token %}
                                 {% if profile in user.profile.follows.all %}
-                                    <button type="submit" class="btn btn-danger btn-sm" name="follow" value="unfollow">Unfollow</button>
+                                    <button type="submit" class="btn btn-danger btn-sm w-100" name="follow" value="unfollow">Unfollow</button>
                                 {% else %}
-                                    <button type="submit" class="btn btn-success btn-sm" name="follow" value="follow">Follow</button>
+                                    <button type="submit" class="btn btn-success btn-sm w-100" name="follow" value="follow">Follow</button>
                                 {% endif %}
                             </form>
                             {% if request.user.id == profile.user.id %}
-                                <a href="{% url 'update_area' %}" class="btn btn-secondary btn-sm ms-2">Edit Profile</a>
+                                <a href="{% url 'update_area' %}" class="btn btn-secondary btn-sm w-100">Edit Profile</a>
                             {% endif %}
                         </div>
                     </div>
+
 
                     <!-- Bio Section -->
                     {% if profile.bio %}
@@ -76,30 +80,99 @@
                         <div class="col-lg-8">
                             <h5>Your Posts</h5>
                             {% for post in posts %}
-                            <div class="post py-3">
-                                <div class="d-flex align-items-center mb-2">
-                                    {% if post.user.profile.profile_image %}
-                                    <img 
-                                        src="{{ post.user.profile.profile_image.url|default:'/static/images/default-profile.png' }}" 
-                                        alt="Profile Image" 
-                                        class="rounded-circle me-3" 
-                                        style="width: 50px; height: 50px; object-fit: cover;">
-                                    {% else %}
-                                    <img 
-                                        src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQpzxSFAvJKwKCA3D8by93pnQMYKpKigJJQ4A&s" 
-                                        alt="Profile Image" 
-                                        class="rounded-circle me-3" 
-                                        style="width: 50px; height: 50px; object-fit: cover;">
+                                <a href="{% url 'post' post.id %}"></a>
+                                <div class="post py-3">
+                                    {% if post.group %}
+                                        <a href="{% url 'group' post.group.slug %}" class="h6 text-decoration-none"><i class="fa-solid fa-arrow-up-right-from-square"></i> From {{post.group}}</a>
                                     {% endif %}
-                                    <div>
-                                        <strong>{{ post.user.username }}</strong>
-                                        <br>
-                                        <small class="text-muted">{{ post.created|date:"d M Y, H:i" }}</small>
+                                    <div class="d-flex align-items-center mb-2">
+                                        {% if post.user.profile.profile_image %}
+                                        <img 
+                                            src="{{ post.user.profile.profile_image.url|default:'/static/images/default-profile.png' }}" 
+                                            alt="Profile Image" 
+                                            class="rounded-circle me-3" 
+                                            style="width: 50px; height: 50px; object-fit: cover;"
+                                        >
+                                        {% else %}
+                                        <img 
+                                            src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQpzxSFAvJKwKCA3D8by93pnQMYKpKigJJQ4A&s" 
+                                            alt="Profile Image" 
+                                            class="rounded-circle me-3" 
+                                            style="width: 50px; height: 50px; object-fit: cover;"
+                                        >
+                                        {% endif %}
+                                        <div>
+                                            <a href="{% url 'area' post.user.username %}"><strong>{{ post.user.username }}</strong></a>
+                                            <br>
+                                            <small class="text-muted">{{ post.created|date:"d M Y, H:i" }}</small>
+                                        </div>
                                     </div>
+                                    {% if post.media %}
+                                        <div class="post-media-container">
+                                            {% if post.media.url|is_video %}
+                                                <video controls class="w-100 mt-3">
+                                                    <source src="{{ post.media.url }}" type="video/mp4">
+                                                    Your browser does not support the video tag.
+                                                </video>
+                                            {% elif post.media.url|is_image %}
+                                                <img src="{{ post.media.url }}" class="img-fluid" alt="Post Media">
+                                            {% endif %}
+                                        </div>
+                                    {% endif %}
+
+
+                                    <p class="mb-0">{{ post.content|safe }}</p>
+
+                                    {% if post.is_poll %}
+                                        <div class="poll">
+                                            <p><strong>{{ post.poll.question }}</strong></p>
+                                            
+                                            <form method="POST" action="{% url 'vote_poll' post.poll.id %}">
+                                                {% csrf_token %}
+                                                {% for option in post.poll.options.all %}
+                                                    <label>
+                                                        <input type="radio" name="poll_option" value="{{ option.id }}">
+                                                        {{ option.text }}
+                                                    </label><br>
+                                                {% endfor %}
+                                                <button type="submit">Vote</button>
+                                            </form>
+                                        </div>
+                                    {% endif %}
+                                    <br>
+                                    <a href="#" id="like-button-{{ post.id }}" onclick="likePost({{ post.id }}); return false;">
+                                        {% if user in post.likes.all %}
+                                            <i class="fa-solid fa-thumbs-up"></i>
+                                        {% else %}
+                                            <i class="fa-regular fa-thumbs-up"></i>
+                                        {% endif %}
+                                    </a>
+                                    
+                                    <span id="like-count-{{ post.id }}">
+                                        {{ post.total_likes }}
+                                    </span>
+
+                                    <a href="#" id="dislike-button-{{ post.id }}" onclick="dislikePost({{ post.id }}); return false;">
+                                        {% if user in post.dislikes.all %}
+                                            <i class="fa-solid fa-thumbs-down"></i>
+                                        {% else %}
+                                            <i class="fa-regular fa-thumbs-down"></i>
+                                        {% endif %}
+                                    </a>
+                                    
+                                    <span id="dislike-count-{{ post.id }}">
+                                        {{ post.total_dislikes }}
+                                    </span>
+
+                                    <a href="{% url 'post' post.id %}"><i class="fa-regular fa-comment"></i></a>
+                                    <span>{{ post.comments.count }}</span>
+
+                                    {% if post.user == user %}
+                                    <a href="{% url 'delete_post' post.id %}"><i class="fa-regular fa-trash-can"></i></a>
+                                    {% endif %}
+                                    
+                                    <hr class="mt-3 mb-0">
                                 </div>
-                                <p class="mb-0">{{ post.content }}</p>
-                                <hr class="mt-3 mb-0">
-                            </div>
                             {% empty %}
                             <p class="text-muted">No posts yet.</p>
                             {% endfor %}
@@ -114,4 +187,96 @@
             <h1>Profile not found</h1>
         </div>
     {% endif %}
+
+    <style>
+        .post-media-container {
+            width: 100%;
+            max-width: 100%;
+            height: auto;
+            position: relative;
+            overflow: hidden;
+            border-radius: 20px;
+        }
+
+        .post-media-container img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            object-position: center;
+        }
+
+        .post-media-container video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            object-position: center;
+        }
+
+    </style>
+
+<script>
+    const csrfToken = '{{ csrf_token }}';
+
+    function likePost(postId) {
+        fetch(`/like-post/${postId}/`, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': csrfToken // Make sure you're sending the CSRF token
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.error) {
+                alert(data.error);  // Show error if user is not authenticated
+            } else {
+                const likeCountElement = document.getElementById(`like-count-${postId}`);
+                likeCountElement.textContent = `${data.total_likes}`;
+
+                // Update the like button state based on whether the user liked or unliked
+                const likeButton = document.getElementById(`like-button-${postId}`);
+                if (data.liked) {
+                    likeButton.innerHTML = '<i class="fa-solid fa-thumbs-up"></i>';  // Change button text to 'Unlike'
+                } else {
+                    likeButton.innerHTML = '<i class="fa-regular fa-thumbs-up"></i>';   // Change button text to 'Like'
+                }
+            }
+        })
+        .catch(error => {
+            console.error('Error liking the post:', error);
+            alert('Error liking the post');
+        });
+    }
+
+    function dislikePost(postId) {
+        fetch(`/dislike-post/${postId}/`, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': csrfToken // Make sure you're sending the CSRF token
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.error) {
+                alert(data.error);  // Show error if user is not authenticated
+            } else {
+                const likeCountElement = document.getElementById(`dislike-count-${postId}`);
+                likeCountElement.textContent = `${data.total_dislikes}`;
+
+                // Update the like button state based on whether the user liked or unliked
+                const dislikeButton = document.getElementById(`dislike-button-${postId}`);
+                if (data.disliked) {
+                    dislikeButton.innerHTML = '<i class="fa-solid fa-thumbs-down"></i>';  // Change button text to 'Unlike'
+                } else {
+                    dislikeButton.innerHTML = '<i class="fa-regular fa-thumbs-down"></i>';   // Change button text to 'Like'
+                }
+            }
+        })
+        .catch(error => {
+            console.error('Error liking the post:', error);
+            alert('Error liking the post');
+        });
+    }
+
+
+</script>
 {% endblock %}

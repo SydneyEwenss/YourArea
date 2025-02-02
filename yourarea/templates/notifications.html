@@ -33,7 +33,7 @@
                         <p class="mb-1"><strong>{{ notification.title }}</strong></p>
                         <p class="mb-2 text-muted">{{ notification.message }}</p>
                         <div class="d-flex justify-content-between">
-                            <small class="text-muted">{{ notification.timestamp|date:"d M Y, H:i" }}</small>
+                            <small class="text-muted">{{ notification.created|date:"d M Y, H:i" }}</small>
                             <div>
                                 <a href="{% url 'mark_as_read' notification.id %}" class="btn btn-sm btn-outline-success">Mark as Read</a>
                                 <a href="{% url 'delete_notification' notification.id %}" class="btn btn-sm btn-outline-danger">Delete</a>

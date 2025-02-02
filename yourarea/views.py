@@ -4,31 +4,67 @@ from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.models import User
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404
+from django.core.paginator import Paginator
+from django.template.loader import render_to_string
 from .models import Post, Profile, Comment
 from .forms import *
+from .utils import *
 
-# Create your views here.
+from django.http import JsonResponse
+from django.core.paginator import Paginator
+
 def home(request):
+    tab = request.GET.get('tab', 'all')
+    
     if request.user.is_authenticated:
-        form = PostForm(request.POST or None)
-        if request.method == "POST":
-            if form.is_valid():
-                post = form.save(commit=False)
-                post.user = request.user
-                post.save()
-                messages.success(request, 'Post created successfully.')
-                return redirect('home')
-
-        tab = request.GET.get('tab', 'all')
         if tab == 'following':
             posts = Post.objects.filter(user__profile__in=request.user.profile.follows.all()).order_by('-created')
             posts = posts | Post.objects.filter(group__members=request.user).order_by('-created')
+            posts = posts.distinct()  # Remove duplicates
         else:
             posts = Post.objects.all().order_by('-created')
-        return render(request, 'home.html', {'posts': posts, 'form': form})
+
+        # Linkify the post content
+        for post in posts:
+            post.content = linkify_mentions(post.content)
+
+        # Paginate posts
+        paginator = Paginator(posts, 20)
+        page_number = request.GET.get('page') or 1
+        page_obj = paginator.get_page(page_number)
+
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            # Render posts with the post_list template
+            html = render_to_string('post_list.html', {'posts': page_obj})
+            return JsonResponse({'html': html})
+
+        return render(request, 'home.html', {'posts': page_obj})
+
     else:
+        # Handle when the user is not authenticated
         posts = Post.objects.all().order_by('-created')
-        return render(request, 'home.html', {'posts': posts})
+        paginator = Paginator(posts, 20)
+        page_number = request.GET.get('page') or 1
+        page_obj = paginator.get_page(page_number)
+
+        return render(request, 'home.html', {'posts': page_obj})
+    
+from django.http import JsonResponse
+
+def load_more_posts(request):
+    # Get the next page number from the request
+    page = request.GET.get('page', 1)
+    # Fetch posts for that page (adjust this query based on your pagination logic)
+    posts = Post.objects.all()[10 * (int(page) - 1): 10 * int(page)]
+    
+    # Check if posts are available
+    if posts:
+        # Return posts in JSON format
+        post_data = [{'id': post.id, 'content': post.content, 'created_at': post.created} for post in posts]
+        return JsonResponse({'posts': post_data})
+    else:
+        # Return empty posts array if no posts are found
+        return JsonResponse({'posts': []})
     
 def login_user(request):
     if request.method == "POST":
@@ -92,8 +128,7 @@ def update_profile(request):
         profile = Profile.objects.get(user__id=request.user.id)
         user_form = SignUpForm(request.POST or None, instance=current_user)
         profile_form = ProfileForm(request.POST or None, request.FILES or None, instance=profile)
-        if user_form.is_valid() and profile_form.is_valid():
-            user_form.save()
+        if profile_form.is_valid():
             profile_form.save()
             login(request, current_user)
             messages.success(request, 'Profile updated successfully.')
@@ -204,9 +239,9 @@ def delete_post(request, pk):
     
 def notifications(request):
     if request.user.is_authenticated:
-        unread_notifications = Notification.objects.filter(user=request.user, is_read=False)
-        read_notifications = Notification.objects.filter(user=request.user, is_read=True)
-        action_required_notifications = Notification.objects.filter(user=request.user, is_read=False, action_url__isnull=False)
+        unread_notifications = Notification.objects.filter(user=request.user, is_read=False).order_by('-created')
+        read_notifications = Notification.objects.filter(user=request.user, is_read=True).order_by('-created')
+        action_required_notifications = Notification.objects.filter(user=request.user, is_read=False, action_url__isnull=False).order_by('-created')
 
         context = {
             'unread_notifications': unread_notifications,
@@ -270,7 +305,7 @@ def group(request, slug):
         events = Event.objects.filter(group=group).order_by('-created')
         news = News.objects.filter(group=group).order_by('-created')
 
-        form = PostForm(request.POST or None)
+        form = PostForm(request.POST or None, request.FILES or None)
         if request.method == "POST":
             if 'join_group' in request.POST:
                 group.members.add(request.user)
@@ -283,8 +318,9 @@ def group(request, slug):
                 post.user = request.user
                 post.group = group
                 post.save()
+                print(request.FILES)
                 messages.success(request, 'Post created successfully.')
-                return redirect('group', slug = group.slug)
+                return redirect('group' , slug = group.slug)
     
         return render(request, 'groups/group.html', {'group': group, 'posts': posts, 'events': events, 'news': news, 'form': form})
     
@@ -361,3 +397,23 @@ def create_event(request, slug):
         else:
             form = EventForm()
         return render(request, 'groups/create_event.html', {'form': form})
+    
+def post_create(request):
+    if request.user.is_authenticated:
+        form = PostForm(request.POST, request.FILES)
+
+        if request.method == "POST":
+            if form.is_valid():
+                post = form.save(commit=False)
+                post.user = request.user
+                post.save()
+                messages.success(request, 'Post created successfully.')
+                # Return JSON response indicating success
+                return JsonResponse({'success': True})
+            else:
+                # Return validation errors
+                return JsonResponse({'success': False, 'errors': form.errors})
+    else:
+        messages.error(request, 'You must be logged in to create a post.')
+        return redirect('home')
+    

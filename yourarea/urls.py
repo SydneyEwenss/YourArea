@@ -3,6 +3,7 @@ from . import views
 
 urlpatterns = [
     path('', views.home, name='home'),
+    path('load_more_posts/', views.load_more_posts, name='load_more_posts'),
     path('login/', views.login_user, name='login'),
     path('logout/', views.logout_user, name='logout'),
     path('register/', views.register_user, name='register'),
@@ -26,4 +27,5 @@ urlpatterns = [
     path('group/<slug:slug>/create-event', views.create_event, name='create_event'),
     path('search/', views.search, name='search'),
     path('areas/', views.profiles_list, name='areas_list'),
+    path('create-post/', views.post_create, name='create_post'),
 ]

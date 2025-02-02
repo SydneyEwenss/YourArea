@@ -1,23 +1,33 @@
 {% extends 'base.html' %}
+{% load custom_filters %}
+{% load static %}
+
 
 {% block content %}
 
-    <!-- Tab Navigation -->
-    <div class="btn-group mb-4">
-        <a href="?tab=all" class="btn btn-secondary {% if tab == 'all' %}active{% endif %}">All</a>
-        <a href="?tab=following" class="btn btn-secondary {% if tab == 'following' %}active{% endif %}">Following</a>
+    <div class="container">
+        <div class="row mb-4">
+            <div class="col-6">
+                <a href="?tab=all" class="nav-link {% if tab == 'all' %}active{% endif %} text-center w-100">All</a>
+            </div>
+            <div class="col-6">
+                <a href="?tab=following" class="nav-link {% if tab == 'following' %}active{% endif %} text-center w-100">Following</a>
+            </div>
+        </div>
+
+        <!-- Tab Content -->
+        <div class="tab-content">
+            <div class="tab-pane fade {% if tab == 'all' %}show active{% endif %}" id="all">
+                <!-- Content for "All" tab -->
+            </div>
+            <div class="tab-pane fade {% if tab == 'following' %}show active{% endif %}" id="following">
+                <!-- Content for "Following" tab -->
+            </div>
+        </div>
     </div>
 
-    {% if form %}
-    <form method=POST>
-        {% csrf_token %}
-        {{ form.as_p }}
-        <button type="submit" class="btn btn-secondary">Post</button>
-    </form>
-    {% endif %}
-    
+    <div id="post-container">
     {% for post in posts %}
-    <a href="{% url 'post' post.id %}"></a>
     <div class="post py-3">
         {% if post.group %}
             <a href="{% url 'group' post.group.slug %}" class="h6 text-decoration-none"><i class="fa-solid fa-arrow-up-right-from-square"></i> From {{post.group}}</a>
@@ -44,7 +54,37 @@
                 <small class="text-muted">{{ post.created|date:"d M Y, H:i" }}</small>
             </div>
         </div>
-        <p class="mb-0">{{ post.content }}</p>
+        {% if post.media %}
+            {% if post.media.url|is_video %}
+                <video controls class="w-100 mt-3">
+                    <source src="{{ post.media.url }}" type="video/mp4">
+                    Your browser does not support the video tag.
+                </video>
+            {% elif post.media.url|is_image %}
+                <img src="{{ post.media.url }}" class="img-fluid" alt="Post Media">
+            {% endif %}
+        {% endif %}
+
+
+        <p class="mb-0">{{ post.content|safe }}</p>
+
+        {% if post.is_poll %}
+            <div class="poll">
+                <p><strong>{{ post.poll.question }}</strong></p>
+                
+                <form method="POST" action="{% url 'vote_poll' post.poll.id %}">
+                    {% csrf_token %}
+                    {% for option in post.poll.options.all %}
+                        <label>
+                            <input type="radio" name="poll_option" value="{{ option.id }}">
+                            {{ option.text }}
+                        </label><br>
+                    {% endfor %}
+                    <button type="submit">Vote</button>
+                </form>
+            </div>
+        {% endif %}
+        <br>
         <a href="#" id="like-button-{{ post.id }}" onclick="likePost({{ post.id }}); return false;">
             {% if user in post.likes.all %}
                 <i class="fa-solid fa-thumbs-up"></i>
@@ -72,12 +112,20 @@
         <a href="{% url 'post' post.id %}"><i class="fa-regular fa-comment"></i></a>
         <span>{{ post.comments.count }}</span>
 
-        <a href="{% url 'delete_post' post.id %}"><i class="fa-regular fa-trash"></i></a>
+        {% if post.user == user %}
+        <a href="{% url 'delete_post' post.id %}"><i class="fa-regular fa-trash-can"></i></a>
+        {% endif %}
         
         <hr class="mt-3 mb-0">
     </div>
     {% endfor %}
+    </div>
 
+    <div id="loading" style="display: none; text-align: center; margin-top: 20px;">
+        <p>Loading more posts...</p>
+    </div>    
+
+    <!-- post scripts -->
     <script>
         const csrfToken = '{{ csrf_token }}';
 
@@ -143,5 +191,49 @@
 
 
     </script>
+
+    <script src="{% static 'yourarea/js/infinite_scroll.js' %}"></script>
+
+    <style>
+        .post-image-container {
+            width: 100%;
+            max-width: 100%;
+            height: auto;
+            position: relative;
+            overflow: hidden;     /* Hide excess image parts */
+            border-radius: 20px;
+        }
+
+        .post-image-container img {
+            width: 100%;           /* Image will stretch to fit container width */
+            height: 100%;          /* Image will stretch to fit container height */
+            object-fit: cover;     /* Image covers container while maintaining aspect ratio */
+            object-position: center; /* Centers the image */
+        }
+
+        /* Add hover effect: Darken tab on hover */
+        .nav-link:hover {
+            background-color: #c4c4c4;  /* Darker background color */
+            color: white;  /* Change text color on hover */
+        }
+
+        /* Make the active tab's text bold */
+        .nav-link.active {
+            font-weight: bold;
+        }
+
+        /* Add border between the tabs */
+        .nav-link {
+            border-right: 1px solid #ddd;  /* Adds a border between the tabs */
+            padding: 10px 0;
+            margin: 0 0;
+        }
+
+        /* Remove border on the last tab */
+        .nav-link:last-child {
+            border-right: none;
+        }
+
+    </style>
 
 {% endblock %}

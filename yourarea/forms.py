@@ -14,10 +14,26 @@ class PostForm(forms.ModelForm):
             ),
             label=''
         )
+    media = forms.FileField(required=False, widget=forms.FileInput(
+        attrs={
+            'class': 'form-control',
+            'accept': 'image/*,video/*',
+            }
+    ), label='')
     
     class Meta:
         model = Post
-        exclude = ('user', 'likes', 'dislikes', 'group',)
+        fields = ('content', 'media',)
+
+    def clean_media(self):
+        media = self.cleaned_data.get('media')
+
+        if media:
+            # Check the file type here
+            if not media.name.endswith(('.mp4', '.webm', '.ogg', '.jpg', '.jpeg', '.png', '.gif')):
+                raise forms.ValidationError('Invalid file format. Allowed formats are .mp4, .webm, .ogg, .jpg, .jpeg, .png, .gif')
+        
+        return media
 
 class CommentForm(forms.ModelForm):
     content = forms.CharField(required=True, widget=forms.Textarea(
@@ -94,11 +110,14 @@ class GroupForm(forms.ModelForm):
         model = Group
         fields = ('name', 'description', 'group_image', 'background_image',)
 
+class DateTimeInput(forms.DateTimeInput):
+    input_type = 'datetime-local'
+
 class EventForm(forms.ModelForm):
     title = forms.CharField(label='Title', widget=forms.TextInput(attrs={'class': 'form-control'}))
     description = forms.CharField(label='Description', required=True, widget=forms.Textarea(attrs={'class': 'form-control'}))
-    date = forms.DateTimeField(label='Date', widget=forms.DateTimeInput(attrs={'class': 'form-control'}))
-    location = forms.CharField(label='Location', widget=forms.TextInput(attrs={'class': 'form-control'}))
+    date = forms.DateTimeField(label='Date', widget=DateTimeInput())
+    location = forms.CharField(label='Location', required=False, widget=forms.TextInput(attrs={'class': 'form-control'}))
 
     class Meta:
         model = Event

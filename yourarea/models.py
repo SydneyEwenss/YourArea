@@ -3,15 +3,46 @@ from django.contrib.auth.models import User
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 from django.utils.text import slugify
+from imagekit.models import ProcessedImageField
+from imagekit.processors import ResizeToFill, ResizeToFit
+import re
+
+class Notification(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='notifications')
+    title = models.CharField(max_length=255)
+    message = models.TextField()
+    is_read = models.BooleanField(default=False)
+    action_url = models.CharField(max_length=255, blank=True, null=True)
+    created = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f'{self.user.username} received a notification ({self.created:%d-%m-%Y %H:%M}): {self.message}'
+    
+
 
 class Profile(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE)
     follows = models.ManyToManyField('self', related_name='followed_by', symmetrical=False, blank=True)
     date_modified = models.DateTimeField(User, auto_now=True)
 
-    profile_image = models.ImageField(upload_to='images/profile_images', blank=True, null=True)
+    profile_image = ProcessedImageField(
+        upload_to='profile_images/',
+        processors=[ResizeToFill(300, 300)],
+        format='JPEG',
+        options={'quality': 80},
+        null=True,
+        blank=True,
+        default='default-profile.jpg'
+    )
     display_name = models.CharField(max_length=30, blank=True)
-    background_image = models.ImageField(upload_to='images/background_images', blank=True, null=True)
+    background_image = ProcessedImageField(
+        upload_to='profile_background_images/',
+        processors=[ResizeToFill(1920, 1080)],
+        format='JPEG',
+        options={'quality': 80},
+        null=True,
+        blank=True,
+    )
     bio = models.CharField(max_length=280, blank=True)
     pronouns = models.CharField(max_length=15, blank=True)
 
@@ -36,8 +67,22 @@ class Group(models.Model):
     name = models.CharField(max_length=50, unique=True)
     slug = models.SlugField(unique=True)
     description = models.TextField()
-    group_image = models.ImageField(upload_to='images/group_images')
-    background_image = models.ImageField(upload_to='images/background_images', blank=True, null=True)
+    group_image = ProcessedImageField(
+        upload_to='group_images/',
+        processors=[ResizeToFill(300, 300)],
+        format='JPEG',
+        options={'quality': 80},
+        null=True,
+        blank=True,
+    )
+    background_image = ProcessedImageField(
+        upload_to='group_background_images/',
+        processors=[ResizeToFill(1920, 1080)],
+        format='JPEG',
+        options={'quality': 80},
+        null=True,
+        blank=True,
+    )
 
     def save(self, *args, **kwargs):
         if not self.slug:
@@ -50,10 +95,16 @@ class Group(models.Model):
 class Post(models.Model):
     group = models.ForeignKey(Group, on_delete=models.CASCADE, blank=True, null=True)
     user = models.ForeignKey(User, related_name="posts", on_delete=models.CASCADE)
+    mentions = models.ManyToManyField(User, related_name='mentioned_in', blank=True)
+
     content = models.CharField(max_length=280)
+    media = models.FileField(upload_to='post_media/', blank=True, null=True)
+
     created = models.DateTimeField(auto_now_add=True)
+
     likes = models.ManyToManyField(User, related_name='liked_posts', blank=True)
     dislikes = models.ManyToManyField(User, related_name='disliked_posts', blank=True)
+    
     
     def total_likes(self):
         return self.likes.count()
@@ -61,8 +112,26 @@ class Post(models.Model):
     def total_dislikes(self):
         return self.dislikes.count()
 
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)  # Save the post first to get its ID
+        mentioned_usernames = extract_mentions(self.content)
+        mentioned_users = User.objects.filter(username__in=mentioned_usernames)
+        self.mentions.set(mentioned_users)
+
+        for user in mentioned_users:
+            Notification.objects.create(
+                user=user,
+                title=f'Mentioned in post by {self.user.username}',
+                message=f'You were mentioned in a post by {self.user.username}.',
+                action_url=f'/post/{self.id}'
+            )
+
     def __str__(self):
         return f'{self.user.username} ({self.created:%d-%m-%Y %H:%M}): {self.content}'
+    
+def extract_mentions(content):
+        mention_pattern = r'@(\w+)'
+        return re.findall(mention_pattern, content)
     
 class Comment(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE)
@@ -108,15 +177,4 @@ class Dislike(models.Model):
 
     def __str__(self):
         return f'{self.user.username} disliked {self.post.user.username}\'s post ({self.created:%d-%m-%Y %H:%M})'
-    
-class Notification(models.Model):
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='notifications')
-    title = models.CharField(max_length=255)
-    message = models.TextField()
-    is_read = models.BooleanField(default=False)
-    action_url = models.CharField(max_length=255, blank=True, null=True)
-    created = models.DateTimeField(auto_now_add=True)
-
-    def __str__(self):
-        return f'{self.user.username} received a notification ({self.created:%d-%m-%Y %H:%M}): {self.message}'
     
