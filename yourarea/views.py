@@ -2,83 +2,137 @@ from django.shortcuts import render, redirect
 from django.contrib import messages
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.models import User
-from django.http import JsonResponse
+from django.http import JsonResponse, HttpResponse
 from django.shortcuts import get_object_or_404
 from django.core.paginator import Paginator
+from django.core.mail import send_mail
 from django.template.loader import render_to_string
+from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
+from django.contrib.auth import get_user_model
+from django.utils.encoding import force_bytes, force_str
+from django.contrib.sites.shortcuts import get_current_site
+from django.contrib.auth.tokens import default_token_generator
+from django.db.models import Count, F, Q, ExpressionWrapper, fields
+from django.utils import timezone
+from datetime import timedelta
 from .models import Post, Profile, Comment
 from .forms import *
 from .utils import *
 
-from django.http import JsonResponse
-from django.core.paginator import Paginator
-
 def home(request):
     tab = request.GET.get('tab', 'all')
-    
+    page_number = request.GET.get('page') or 1
+    page_number = int(page_number)
+    form = None
+
     if request.user.is_authenticated:
+        recommended_posts = get_recommended_posts(request.user, page_number)
+
         if tab == 'following':
             posts = Post.objects.filter(user__profile__in=request.user.profile.follows.all()).order_by('-created')
             posts = posts | Post.objects.filter(group__members=request.user).order_by('-created')
-            posts = posts.distinct()  # Remove duplicates
+            posts = posts.distinct()
         else:
-            posts = Post.objects.all().order_by('-created')
+            posts = recommended_posts
 
-        # Linkify the post content
         for post in posts:
             post.content = linkify_mentions(post.content)
 
-        # Paginate posts
-        paginator = Paginator(posts, 20)
-        page_number = request.GET.get('page') or 1
-        page_obj = paginator.get_page(page_number)
-
-        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-            # Render posts with the post_list template
-            html = render_to_string('post_list.html', {'posts': page_obj})
-            return JsonResponse({'html': html})
-
-        return render(request, 'home.html', {'posts': page_obj})
+        form = PostForm(request.POST or None, request.FILES or None)
+        if request.method == "POST":
+            if form.is_valid():
+                post = form.save(commit=False)
+                post.user = request.user
+                post.save()
+                messages.success(request, 'Post created successfully.')
+            else:
+                messages.error(request, 'There was an error making this post')
 
     else:
-        # Handle when the user is not authenticated
         posts = Post.objects.all().order_by('-created')
-        paginator = Paginator(posts, 20)
-        page_number = request.GET.get('page') or 1
-        page_obj = paginator.get_page(page_number)
 
-        return render(request, 'home.html', {'posts': page_obj})
-    
-from django.http import JsonResponse
+    paginator = Paginator(posts, 10)
+    page_obj = paginator.get_page(page_number)
 
-def load_more_posts(request):
-    # Get the next page number from the request
-    page = request.GET.get('page', 1)
-    # Fetch posts for that page (adjust this query based on your pagination logic)
-    posts = Post.objects.all()[10 * (int(page) - 1): 10 * int(page)]
-    
-    # Check if posts are available
-    if posts:
-        # Return posts in JSON format
-        post_data = [{'id': post.id, 'content': post.content, 'created_at': post.created} for post in posts]
-        return JsonResponse({'posts': post_data})
-    else:
-        # Return empty posts array if no posts are found
-        return JsonResponse({'posts': []})
-    
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        html = render_to_string('post_list.html', {'posts': page_obj})
+
+        if not html.strip():
+            return JsonResponse({'html': ''})
+
+        return JsonResponse({'html': html})
+
+    return render(request, 'home.html', {'posts': page_obj, 'form': form})
+
+def get_recommended_posts(user, page_number=1, page_size=10):
+    current_time = timezone.now()
+    user_interests = user.profile.interests.all()
+
+    recommended_posts = Post.objects.filter(tags__in=user_interests).distinct()
+    recommended_posts = recommended_posts.annotate(
+        like_count=Count('likes__id'),
+        recency_weight=ExpressionWrapper(
+            current_time - F('created'),
+            output_field=fields.FloatField()
+        )
+    ).annotate(
+        recency_seconds = F('recency_weight')
+    ).annotate(
+        score = F('like_count') * 3 - F('recency_seconds') * 0.1
+    )
+
+    followed_users_posts = Post.objects.filter(user__profile__in=user.profile.follows.all()).distinct()
+    followed_users_posts = followed_users_posts.annotate(
+        like_count=Count('likes__id'),
+        recency_weight=ExpressionWrapper(
+            current_time - F('created'),
+            output_field=fields.FloatField()
+        )
+    ).annotate(
+        recency_seconds = F('recency_weight')
+    ).annotate(
+        score = F('like_count') * 2 - F('recency_seconds') * 0.1
+    )
+
+    followed_group_posts = Post.objects.filter(group__members=user).distinct()
+    followed_group_posts = followed_group_posts.annotate(
+        like_count=Count('likes__id'),
+        recency_weight=ExpressionWrapper(
+            current_time - F('created'),
+            output_field=fields.FloatField()
+        )
+    ).annotate(
+        recency_seconds = F('recency_weight')
+    ).annotate(
+        score = F('like_count') * 1 - F('recency_seconds') * 0.1
+    )
+
+    all_recommendations = recommended_posts | followed_users_posts | followed_group_posts
+    all_recommendations = all_recommendations.order_by('-score', '-created')
+
+    paginator = Paginator(all_recommendations, page_size)
+    page_obj = paginator.get_page(page_number)
+
+    return page_obj
+
 def login_user(request):
     if request.method == "POST":
         username = request.POST['username']
         password = request.POST['password']
         user = authenticate(request, username=username, password=password)
+
         if user is not None:
-            login(request, user)
-            messages.success(request, 'You have successfully logged in.')
-            return redirect('home')
+            if user.is_active:
+                login(request, user)
+                messages.success(request, 'You have successfully logged in.')
+                return redirect('home')
+            else:
+                messages.error(request, 'Your account has not been activated. Check your emails.')
+                return redirect('login')
         else:
             messages.error(request, 'Invalid login credentials.')
             return redirect('login')
-    return render(request, 'login.html')
+    return render(request, 'auth/login.html')
 
 def logout_user(request):
     logout(request)
@@ -90,14 +144,86 @@ def register_user(request):
     if request.method == "POST":
         form = SignUpForm(request.POST)
         if form.is_valid():
-            form.save()
-            username = form.cleaned_data['username']
-            password = form.cleaned_data['password1']
-            user = authenticate(username=username, password=password)
-            login(request, user)
-            messages.success(request, 'You have successfully registered.')
-            return redirect('home')
-    return render(request, 'register.html', {'form': form})
+            user = form.save(commit=False)
+            user.set_password(form.cleaned_data['password1'])
+            user.is_active = False
+            user.save()
+
+            token = default_token_generator.make_token(user)
+            uid = urlsafe_base64_encode(force_bytes(user.pk))
+            domain = get_current_site(request).domain
+            link = f"http://{domain}/activate/{uid}/{token}/"
+
+            subject = "Confirm Your Email Address"
+            message = render_to_string('emails/confirmation_email.html', {'user': user, 'link': link})
+
+            send_mail(subject, message, 'sydneyewens06@gmil.com', [user.email])
+
+            return render(request, 'emails/check_email.html')
+    return render(request, 'auth/register.html', {'form': form})
+
+def activate(request, uidb64, token):
+    try:
+        uid = force_str(urlsafe_base64_decode(uidb64))
+        user = User.objects.get(pk=uid)
+    except (TypeError, ValueError, OverflowError, User.DoesNotExist):
+        user = None
+
+    if user is not None and default_token_generator.check_token(user, token):
+        user.is_active = True
+        user.save()
+        login(request, user)
+        messages.success(request, "Your account has been activated.")
+        return redirect('home')
+    else:
+        messages.error(request, "Invalid activation link.")
+        return redirect('login')
+    
+def password_reset_request(request):
+    form = PasswordResetForm()
+    
+    if request.method == "POST":
+        form = PasswordResetForm(request.POST)
+        if form.is_valid():
+            email = form.cleaned_data["email"]
+            user = User.objects.filter(email=email).first()
+            if user:
+                token = default_token_generator.make_token(user)
+                uid = urlsafe_base64_encode(force_bytes(user.pk))
+                domain = request.get_host()
+                link = f"http://{domain}/password_reset_confirm/{uid}/{token}/"
+
+                subject = "Reset Your Password"
+                message = render_to_string('emails/password_reset_email.html', {'user': user, 'link': link})
+
+                send_mail(subject, message, 'sydneyewens06@gmail.com', [user.email])
+
+            return render(request, "emails/password_reset_sent.html")
+
+    return render(request, "auth/password_reset.html", {"form": form})
+    
+def password_reset_confirm(request, uidb64, token):
+    try:
+        uid = force_str(urlsafe_base64_decode(uidb64))
+        user = User.objects.get(pk=uid)
+    except (TypeError, ValueError, OverflowError, User.DoesNotExist):
+        user = None
+
+    if user is not None and default_token_generator.check_token(user, token):
+        if request.method == "POST":
+            form = SetPasswordForm(request.POST)
+            if form.is_valid():
+                user.set_password(form.cleaned_data["new_password1"])
+                user.save()
+                return redirect("password_reset_complete")
+        else:
+            form = SetPasswordForm()
+        return render(request, "auth/password_reset_confirm.html", {"form": form})
+    else:
+        return render(request, "auth/password_reset_invalid.html")
+
+def password_reset_complete(request):
+    return render(request, "auth/password_reset_complete.html")
 
 def profile(request, username):
     profile = get_object_or_404(Profile, user__username=username)
@@ -107,9 +233,25 @@ def profile(request, username):
             current_user_profile = request.user.profile
             action = request.POST['follow']
             if action == 'follow':
-                current_user_profile.follows.add(profile)
+                if current_user_profile != profile:
+                    current_user_profile.follows.add(profile)
+                    create_notification(
+                        user=profile.user,
+                        title=f"{request.user.username} followed you",
+                        action_url=reverse('area', args=[profile.user.username])
+                    )
+                else:
+                    messages.error(request, "You can't follow yourself")
             else:
-                current_user_profile.follows.remove(profile)
+                if current_user_profile != profile:
+                    current_user_profile.follows.remove(profile)
+                    create_notification(
+                        user=profile.user,
+                        title=f"{request.user.username} unfollowed you",
+                        action_url=reverse('area', args=[profile.user.username])
+                    )
+                else:
+                    messages.error(request, "You can't unfollow yourself")
             current_user_profile.save()
 
     return render(request, 'profile.html', {'profile': profile, 'posts': posts})
@@ -149,11 +291,13 @@ def post(request, pk):
                 comment.user = request.user
                 comment.post = post
                 comment.save()
-                create_notification(
-                    user=post.user,
-                    title=f"{request.user.username} commented on your post",
-                    message=comment.content
-                )
+                if comment.user != post.user:
+                    create_notification(
+                        user=post.user,
+                        title=f"{request.user.username} commented on your post",
+                        message=comment.content,
+                        action_url=reverse('post', args=[post.id])
+                    )
                 messages.success(request, 'Comment added successfully.')
                 return redirect('post', pk=pk)
         else:
@@ -171,11 +315,13 @@ def like_post(request, post_id):
         if request.user not in post.likes.all():
             post.likes.add(request.user)
             liked = True
-            create_notification(
-                user=post.user,
-                title=f"{request.user.username} liked your post",
-                message=post.content
-            )
+            if post.user != request.user:
+                create_notification(
+                    user=post.user,
+                    title=f"{request.user.username} liked your post",
+                    message=post.content,
+                    action_url=reverse('post', args=[post_id])
+                )
         else:
             # If the user has already liked the post, remove the like
             post.likes.remove(request.user)
@@ -190,7 +336,7 @@ def like_post(request, post_id):
             'liked': liked  # True if liked, False if unliked
         })
     else:
-        # User is not authenticated, return an error message
+        messages.error(request, "You must be logged in to like posts")
         return JsonResponse({'error': 'User not authenticated'}, status=400)
     
 def dislike_post(request, post_id):
@@ -201,11 +347,13 @@ def dislike_post(request, post_id):
         if request.user not in post.dislikes.all():
             post.dislikes.add(request.user)
             disliked = True
-            create_notification(
-                user=post.user,
-                title=f"{request.user.username} disliked your post",
-                message=post.content
-            )
+            if post.user != request.user:
+                create_notification(
+                    user=post.user,
+                    title=f"{request.user.username} disliked your post",
+                    message=post.content,
+                    action_url=reverse('post', args=[post_id])
+                )
         else:
             # If the user has already disliked the post, remove the dislike
             post.dislikes.remove(request.user)
@@ -241,12 +389,10 @@ def notifications(request):
     if request.user.is_authenticated:
         unread_notifications = Notification.objects.filter(user=request.user, is_read=False).order_by('-created')
         read_notifications = Notification.objects.filter(user=request.user, is_read=True).order_by('-created')
-        action_required_notifications = Notification.objects.filter(user=request.user, is_read=False, action_url__isnull=False).order_by('-created')
 
         context = {
             'unread_notifications': unread_notifications,
             'read_notifications': read_notifications,
-            'action_required_notifications': action_required_notifications,
             'unread_notifications_count': unread_notifications.count()
         }
         return render(request, 'notifications.html', context)
@@ -254,27 +400,32 @@ def notifications(request):
         messages.error(request, 'You must be logged in to view notifications.')
         return redirect('home')
     
-def mark_as_read(request, notification_id):
+def mark_as_read(request, notification_id=None):
     if request.user.is_authenticated:
+        if request.method == 'POST' and notification_id is None:
+            Notification.objects.filter(user=request.user, is_read=False).update(is_read=True)
+            return JsonResponse({'status': 'success'})
+        
         notification = get_object_or_404(Notification, id=notification_id, user=request.user)
         notification.is_read = True
         notification.save()
         return redirect('notifications')
-    else:
-        messages.error(request, 'You must be logged in to mark notifications as read.')
-        return redirect('home')
+
+    messages.error(request, 'You must be logged in to mark notifications as read.')
+    return redirect('home')
     
-def delete_notification(request, notification_id):
-    if request.user.is_authenticated:
-        notification = get_object_or_404(Notification, id=notification_id, user=request.user)
-        notification.delete()
-        return redirect('notifications')
-    else:
-        messages.error(request, 'You must be logged in to delete notifications.')
-        return redirect('home')
-    
-def create_notification(user, title, message, action_url=None):
-    Notification.objects.create(user=user, title=title, message=message, action_url=action_url)
+def create_notification(user, title, message=None, action_url=None):
+    time_threshold = timezone.now() - timedelta(minutes = 60)
+
+    recent_notification_exists = Notification.objects.filter(
+        user=user,
+        title=title,
+        message=message,
+        created__gte=time_threshold
+    ).exists()
+
+    if not recent_notification_exists:
+        Notification.objects.create(user=user, title=title, message=message, action_url=action_url)
 
 def groups_list(request):
     groups = Group.objects.all().order_by('-date_created')  # Fetch all groups
@@ -299,12 +450,14 @@ def create_group(request):
         return render(request, 'groups/create_group.html', {'form': form})
     
 def group(request, slug):
-    if request.user.is_authenticated:
-        group = get_object_or_404(Group, slug = slug)
-        posts = Post.objects.filter(group=group).order_by('-created')
-        events = Event.objects.filter(group=group).order_by('-created')
-        news = News.objects.filter(group=group).order_by('-created')
+    group = get_object_or_404(Group, slug = slug)
+    posts = Post.objects.filter(group=group).order_by('-created')
+    events = Event.objects.filter(group=group).order_by('-created')
+    news = News.objects.filter(group=group).order_by('-created')
 
+    form = None
+
+    if request.user.is_authenticated:
         form = PostForm(request.POST or None, request.FILES or None)
         if request.method == "POST":
             if 'join_group' in request.POST:
@@ -322,7 +475,7 @@ def group(request, slug):
                 messages.success(request, 'Post created successfully.')
                 return redirect('group' , slug = group.slug)
     
-        return render(request, 'groups/group.html', {'group': group, 'posts': posts, 'events': events, 'news': news, 'form': form})
+    return render(request, 'groups/group.html', {'group': group, 'posts': posts, 'events': events, 'news': news, 'form': form})
     
 def join_group(request, slug):
     if request.user.is_authenticated:
@@ -370,7 +523,7 @@ def update_group(request, slug):
 def search(request):
     query = request.GET.get('query', '')  # Get query parameter, default to empty string if not present
     posts = Post.objects.filter(content__icontains=query) if query else []
-    profiles = Profile.objects.filter(display_name__icontains=query) if query else []
+    profiles = Profile.objects.filter(Q(display_name__icontains=query) | Q(user__username__icontains=query)) if query else []
     groups = Group.objects.filter(name__icontains=query) if query else []
 
     return render(request, 'search.html', {

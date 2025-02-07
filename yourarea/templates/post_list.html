@@ -9,13 +9,15 @@
     {% endif %}
     <div class="d-flex align-items-center mb-2">
         <img 
-            src="{% if post.user.profile.profile_image %}{{ post.user.profile.profile_image.url }}{% else %}/static/images/default-profile.png{% endif %}" 
+            src="{% if post.user.profile.profile_image and post.user.profile.profile_image.url %}{{ post.user.profile.profile_image.url }}{% else %}/media/profile_images/default-profile.jpg{% endif %}" 
             alt="Profile Image" 
             class="rounded-circle me-3" 
             style="width: 50px; height: 50px; object-fit: cover;"
+            onerror="this.onerror=null;this.src='/media/profile_images/default-profile.jpg';"
         >
+
         <div>
-            <a href="{% url 'area' post.user.username %}"><strong>{{ post.user.username }}</strong></a>
+            <a href="{% url 'area' post.user.username %}" class="text-decoration-none"><strong>{{ post.user.profile.display_name }}</strong> <small class="text-muted">@{{ post.user.username }}</small></a>
             <br>
             <small class="text-muted">{{ post.created|date:"d M Y, H:i" }}</small>
         </div>

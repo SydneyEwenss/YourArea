@@ -1,76 +1,61 @@
-// Load posts when scrolling down
-window.addEventListener('scroll', function() {
-    const bottomOfPage = document.documentElement.scrollHeight === document.documentElement.scrollTop + window.innerHeight;
-    if (bottomOfPage) {
-        loadMorePosts();
+let page = 2;  // Start loading from page 2
+const postContainer = document.getElementById('post-container');
+const loadingIndicator = document.getElementById('loading');
+
+// Detect scroll event
+window.addEventListener('scroll', () => {
+    if (window.innerHeight + window.scrollY >= document.body.offsetHeight - 100) {
+        if (!loadingIndicator.style.display || loadingIndicator.style.display === 'none') {
+            loadingIndicator.style.display = 'block';
+            loadMorePosts();
+        }
     }
 });
 
-let currentPage = 1;
-let loading = false;
-
-// This function will be called when the user scrolls to the bottom of the page
 function loadMorePosts() {
-    const currentPage = getCurrentPage();  // You'll need to define how to track the current page
-    const url = `/load_more_posts/?page=${currentPage}`;  // URL for your load_more_posts view
+    // Log the page number to ensure it's correct
+    console.log('Loading more posts for page', page);
 
-    // Send an AJAX GET request to the server
-    fetch(url)
-        .then(response => response.json())  // Parse JSON response
-        .then(data => {
-            if (data.posts) {
-                appendPosts(data.posts);  // Function to append posts to the DOM
-                updateCurrentPage();  // Function to update the current page number
-            } else {
-                console.error("No posts data received");
-            }
-        })
-        .catch(error => {
-            console.error("Error loading posts:", error);
-        });
-}
+    fetch(`/?page=${page}&tab=all`, {
+        method: 'GET',
+        headers: {
+            'X-Requested-With': 'XMLHttpRequest'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        console.log('Received data:', data); // Debugging: Log the response
 
-// Call this function to append the posts to your existing posts container
-function appendPosts(posts) {
-    const postsContainer = document.getElementById("posts-container");  // Your posts container
-    posts.forEach(post => {
-        const postElement = createPostElement(post);  // Function to create a post's HTML
-        postsContainer.appendChild(postElement);  // Add the post to the container
+        // If no HTML content, stop the scroll
+        if (data.html.trim() === '') {
+            console.log("No more posts to load.");
+            loadingIndicator.style.display = 'none';
+            window.removeEventListener('scroll', loadMorePosts);
+            return;
+        }
+
+        // Create a div to hold the new posts
+        const newPosts = document.createElement('div');
+        newPosts.innerHTML = data.html.trim();
+
+        // Log the number of new posts being added
+        console.log("New posts added:", newPosts.children.length);
+
+        // Append the new posts to the container
+        postContainer.appendChild(newPosts);
+
+        // Hide the loading indicator and increment the page
+        loadingIndicator.style.display = 'none';
+        page++;
+
+        // If fewer than 10 posts were returned, stop loading more
+        if (newPosts.children.length < 10) {
+            console.log("Last page loaded, stopping infinite scroll.");
+            window.removeEventListener('scroll', loadMorePosts); // Stop infinite scroll
+        }
+    })
+    .catch(error => {
+        console.error("Error loading more posts:", error);
+        loadingIndicator.style.display = 'none';  // Hide loading on error
     });
 }
-
-// Function to create HTML for each post (adjust based on your post model)
-function createPostElement(post) {
-    const postElement = document.createElement("div");
-    postElement.classList.add("post");
-    
-    postElement.innerHTML = `
-        <div class="post-content">${post.content}</div>
-        <div class="post-date">${post.created_at}</div>
-    `;
-    
-    return postElement;
-}
-
-// Function to get the current page (you might already be doing this in your code)
-function getCurrentPage() {
-    // You can store the current page in a global variable or get it from the URL
-    const urlParams = new URLSearchParams(window.location.search);
-    return parseInt(urlParams.get('page') || 1);
-}
-
-// Function to update the current page (increment it after loading more posts)
-function updateCurrentPage() {
-    const currentPage = getCurrentPage();
-    const newPage = currentPage + 1;
-    const newUrl = new URL(window.location.href);
-    newUrl.searchParams.set('page', newPage);
-    window.history.pushState({}, '', newUrl);
-}
-
-// Call loadMorePosts when the user scrolls to the bottom of the page
-window.addEventListener("scroll", function() {
-    if (window.innerHeight + window.scrollY >= document.body.offsetHeight) {
-        loadMorePosts();
-    }
-});

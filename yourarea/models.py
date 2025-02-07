@@ -10,7 +10,7 @@ import re
 class Notification(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='notifications')
     title = models.CharField(max_length=255)
-    message = models.TextField()
+    message = models.TextField(blank=True, null=True)
     is_read = models.BooleanField(default=False)
     action_url = models.CharField(max_length=255, blank=True, null=True)
     created = models.DateTimeField(auto_now_add=True)
@@ -18,7 +18,11 @@ class Notification(models.Model):
     def __str__(self):
         return f'{self.user.username} received a notification ({self.created:%d-%m-%Y %H:%M}): {self.message}'
     
+class Tag(models.Model):
+    name = models.CharField(max_length=100 ,unique=True)
 
+    def __str__(self):
+        return self.name
 
 class Profile(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE)
@@ -32,7 +36,7 @@ class Profile(models.Model):
         options={'quality': 80},
         null=True,
         blank=True,
-        default='default-profile.jpg'
+        default='profile_images/default-profile.jpg'
     )
     display_name = models.CharField(max_length=30, blank=True)
     background_image = ProcessedImageField(
@@ -45,6 +49,8 @@ class Profile(models.Model):
     )
     bio = models.CharField(max_length=280, blank=True)
     pronouns = models.CharField(max_length=15, blank=True)
+
+    interests = models.ManyToManyField(Tag, related_name='interested_users', blank=True)
 
     def __str__(self):
         return self.user.username
@@ -96,6 +102,7 @@ class Post(models.Model):
     group = models.ForeignKey(Group, on_delete=models.CASCADE, blank=True, null=True)
     user = models.ForeignKey(User, related_name="posts", on_delete=models.CASCADE)
     mentions = models.ManyToManyField(User, related_name='mentioned_in', blank=True)
+    tags = models.ManyToManyField(Tag, blank=True)
 
     content = models.CharField(max_length=280)
     media = models.FileField(upload_to='post_media/', blank=True, null=True)
@@ -113,7 +120,7 @@ class Post(models.Model):
         return self.dislikes.count()
 
     def save(self, *args, **kwargs):
-        super().save(*args, **kwargs)  # Save the post first to get its ID
+        super().save(*args, **kwargs)
         mentioned_usernames = extract_mentions(self.content)
         mentioned_users = User.objects.filter(username__in=mentioned_usernames)
         self.mentions.set(mentioned_users)
@@ -126,12 +133,24 @@ class Post(models.Model):
                 action_url=f'/post/{self.id}'
             )
 
+        hashtags = extract_hashtags(self.content)
+        tag_objects = []
+
+        for tag_name in hashtags:
+            tag, created = Tag.objects.get_or_create(name = tag_name.lower())
+            tag_objects.append(tag)
+        self.tags.set(tag_objects)
+
     def __str__(self):
         return f'{self.user.username} ({self.created:%d-%m-%Y %H:%M}): {self.content}'
     
 def extract_mentions(content):
-        mention_pattern = r'@(\w+)'
-        return re.findall(mention_pattern, content)
+    mention_pattern = r'@(\w+)'
+    return re.findall(mention_pattern, content)
+
+def extract_hashtags(content):
+    hashtag_pattern = r'#(\w+)'
+    return re.findall(hashtag_pattern, content)
     
 class Comment(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE)

@@ -1,0 +1,45 @@
+/* Ensure the left and right sidebars are sticky */
+.left-sidebar, .right-sidebar {
+    position: sticky !important; /* Ensure they stick to the top */
+    top: 0 !important; /* Keep them stuck at the top */
+    height: 100vh !important; /* Full viewport height */
+    overflow-y: auto !important; /* Enable scrolling inside the sidebar */
+    z-index: 100 !important; /* Ensure they stay on top */
+}
+
+/* Main content should take the remaining height and be scrollable */
+.main-content {
+    height: calc(100vh - 50px) !important; /* Make the main content scrollable */
+    overflow-y: auto !important; /* Enable scrolling inside the main content area */
+    padding: 15px !important; /* Optional padding */
+}
+
+/* Remove padding from the container to avoid conflicting with Bootstrap */
+.container {
+    padding: 0 !important;
+}
+
+body {
+    margin: 0 !important;
+    padding: 0 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    height: 100vh !important;
+    background-color: red !important;
+}
+
+.row {
+    display: flex !important;
+    flex: 1 !important;
+}
+
+/* For mobile responsiveness */
+@media (max-width: 992px) {
+    .left-sidebar, .right-sidebar {
+        display: none !important; /* Hide sidebars on smaller screens */
+    }
+
+    .main-content {
+        height: auto !important; /* Allow main content to take its normal space */
+    }
+}

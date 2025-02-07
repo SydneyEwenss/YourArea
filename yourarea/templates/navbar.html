@@ -18,9 +18,10 @@
         <ul class="navbar-nav me-auto">
           <li class="nav-item"><a href="{% url 'home' %}" class="nav-link">Home</a></li>
               <li class="nav-item"><a href="{% url 'search' %}" class="nav-link">Search</a></li>
+              {% if user.is_authenticated %}
               <li class="nav-item"><a href="{% url 'notifications' %}" class="nav-link">Notifications <span class="badge bg-danger">{{ unread_notifications_count }}</span></a></li>
               <li class="nav-item"><a href="{% url 'groups_list' %}" class="nav-link">Groups</a></li>
-              <li class="nav-item"><a href="{% url 'areas_list' %}" class="nav-link">Areas</a></li>
+              {% endif %}
               {% if user.is_authenticated %}
               <li class="nav-item"><a href="{% url 'area' request.user.username %}" class="nav-link">{{user.username}}</a></li>
               {% else %}

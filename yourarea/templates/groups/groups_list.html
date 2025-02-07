@@ -3,7 +3,9 @@
 {% block content %}
     <h1 class="mb-4">Groups</h1>
 
+    {% if user.is_authenticated %}
     <a class="btn btn-success" href="{% url 'create_group' %}">Create Group</button>
+    {% endif %}
 
     {% if groups %}
         {% for group in groups %}

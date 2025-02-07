@@ -1,5 +1,5 @@
 from django import forms
-from django.contrib.auth.forms import UserCreationForm
+from django.contrib.auth.forms import UserCreationForm, SetPasswordForm
 from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError
 import re
@@ -99,6 +99,31 @@ class SignUpForm(UserCreationForm):
             raise ValidationError('Username can only contain lowercase letters, digits, periods (.), and underscores (_).')
         
         return username
+    
+class PasswordResetForm(forms.Form):
+    email = forms.EmailField(
+        label="Enter your email",
+        widget=forms.EmailInput(attrs={
+            "class": "form-control",
+            "placeholder": "Enter your email"
+        }),
+    )
+
+class SetPasswordForm(SetPasswordForm):
+    new_password1 = forms.CharField(
+        label="New Password",
+        widget=forms.PasswordInput(attrs={
+            "class": "form-control",
+            "placeholder": "Enter new password"
+        }),
+    )
+    new_password2 = forms.CharField(
+        label="Confirm New Password",
+        widget=forms.PasswordInput(attrs={
+            "class": "form-control",
+            "placeholder": "Confirm new password"
+        }),
+    )
     
 class GroupForm(forms.ModelForm):
     name = forms.CharField(label='Group name', widget=forms.TextInput(attrs={'class': 'form-control'}))

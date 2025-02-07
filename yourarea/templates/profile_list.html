@@ -4,6 +4,7 @@
 
     {% if profiles %}
         {% for profile in profiles %}
+        {% if profile.user.is_active %}
         <a href="{% url 'area' profile.user.username %}">
             <div class="card mb-3">
                 <div class="row g-0">
@@ -23,6 +24,7 @@
                 </div>
             </div>
         </a>
+        {% endif %}
         {% endfor %}
     {% else %}
         <p>No profiles found.</p>

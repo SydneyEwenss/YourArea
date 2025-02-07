@@ -1,90 +1,80 @@
 {% extends 'base.html' %}
 
 {% block content %}
-    <h2 class="mb-4">Notifications</h2>
+<h2 class="mb-4">Notifications</h2>
 
-    <!-- Tabs Navigation -->
-    <ul class="nav nav-tabs" id="notificationsTab" role="tablist">
-        <li class="nav-item" role="presentation">
-            <button class="nav-link active" id="unread-tab" data-bs-toggle="tab" data-bs-target="#unread" type="button" role="tab" aria-controls="unread" aria-selected="true">
-                Unread <span class="badge bg-danger">{{ unread_notifications_count }}</span>
-            </button>
-        </li>
-        <li class="nav-item" role="presentation">
-            <button class="nav-link" id="read-tab" data-bs-toggle="tab" data-bs-target="#read" type="button" role="tab" aria-controls="read" aria-selected="false">
-                Read
-            </button>
-        </li>
-        <li class="nav-item" role="presentation">
-            <button class="nav-link" id="action-required-tab" data-bs-toggle="tab" data-bs-target="#action-required" type="button" role="tab" aria-controls="action-required" aria-selected="false">
-                Action Required
-            </button>
-        </li>
-    </ul>
-
-    <!-- Tab Content -->
-    <div class="tab-content mt-3" id="notificationsTabContent">
-        <!-- Unread Notifications -->
-        <div class="tab-pane fade show active" id="unread" role="tabpanel" aria-labelledby="unread-tab">
-            {% if unread_notifications %}
-                {% for notification in unread_notifications %}
-                <div class="card mb-3">
-                    <div class="card-body">
-                        <p class="mb-1"><strong>{{ notification.title }}</strong></p>
-                        <p class="mb-2 text-muted">{{ notification.message }}</p>
-                        <div class="d-flex justify-content-between">
-                            <small class="text-muted">{{ notification.created|date:"d M Y, H:i" }}</small>
-                            <div>
-                                <a href="{% url 'mark_as_read' notification.id %}" class="btn btn-sm btn-outline-success">Mark as Read</a>
-                                <a href="{% url 'delete_notification' notification.id %}" class="btn btn-sm btn-outline-danger">Delete</a>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                {% endfor %}
-            {% else %}
-                <p class="text-muted">No unread notifications.</p>
-            {% endif %}
+<!-- Unread Notifications -->
+<div id="unread-section">
+    {% if unread_notifications %}
+        <h4 class="text-primary">New Notifications ({{ unread_notifications_count }})</h4>
+        {% for notification in unread_notifications %}
+        <div class="card mb-3 border border-primary bg-light shadow-sm unread-notification"
+             style="cursor: pointer;" 
+             data-id="{{ notification.id }}" 
+             data-action-url="{{ notification.action_url }}">
+            <div class="card-body">
+                <p class="mb-1 fw-bold">{{ notification.title }}</p>
+                {% if notification.message %}
+                    <p class="mb-2 text-muted">{{ notification.message }}</p>
+                {% endif %}
+            </div>
         </div>
+        {% endfor %}
+    {% else %}
+        <p class="text-muted">No new notifications.</p>
+    {% endif %}
+</div>
 
-        <!-- Read Notifications -->
-        <div class="tab-pane fade" id="read" role="tabpanel" aria-labelledby="read-tab">
-            {% if read_notifications %}
-                {% for notification in read_notifications %}
-                <div class="card mb-3">
-                    <div class="card-body">
-                        <p class="mb-1"><strong>{{ notification.title }}</strong></p>
-                        <p class="mb-2 text-muted">{{ notification.message }}</p>
-                        <div class="d-flex justify-content-between">
-                            <small class="text-muted">{{ notification.timestamp|date:"d M Y, H:i" }}</small>
-                            <a href="{% url 'delete_notification' notification.id %}" class="btn btn-sm btn-outline-danger">Delete</a>
-                        </div>
-                    </div>
-                </div>
-                {% endfor %}
-            {% else %}
-                <p class="text-muted">No read notifications.</p>
-            {% endif %}
-        </div>
+<hr>
 
-        <!-- Action Required Notifications -->
-        <div class="tab-pane fade" id="action-required" role="tabpanel" aria-labelledby="action-required-tab">
-            {% if action_required_notifications %}
-                {% for notification in action_required_notifications %}
-                <div class="card mb-3">
-                    <div class="card-body">
-                        <p class="mb-1"><strong>{{ notification.title }}</strong></p>
-                        <p class="mb-2 text-muted">{{ notification.message }}</p>
-                        <div class="d-flex justify-content-between">
-                            <small class="text-muted">{{ notification.timestamp|date:"d M Y, H:i" }}</small>
-                            <a href="{{ notification.action_url }}" class="btn btn-sm btn-primary">Take Action</a>
-                        </div>
-                    </div>
-                </div>
-                {% endfor %}
-            {% else %}
-                <p class="text-muted">No action required notifications.</p>
-            {% endif %}
+<!-- Read Notifications -->
+<h4 class="text-secondary">Earlier Notifications</h4>
+{% if read_notifications %}
+    {% for notification in read_notifications %}
+    <div class="card mb-3 shadow-sm" style="cursor: pointer;" data-action-url="{{ notification.action_url }}">
+        <div class="card-body">
+            <p class="mb-1 fw-bold">{{ notification.title }}</p>
+            <p class="mb-2 text-muted">{{ notification.message }}</p>
         </div>
     </div>
+    {% endfor %}
+{% else %}
+    <p class="text-muted">No earlier notifications.</p>
+{% endif %}
+
+<!-- JavaScript to Handle Notifications -->
+<script>
+    document.addEventListener("DOMContentLoaded", function() {
+        const unreadSection = document.getElementById('unread-section');
+
+        // Mark notifications as read when the section is viewed
+        if (unreadSection) {
+            fetch("{% url 'mark_notifications_as_read' %}", {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': '{{ csrf_token }}',
+                    'Content-Type': 'application/json'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    document.querySelectorAll('.unread-notification').forEach(notification => {
+                        notification.classList.remove('border-primary', 'bg-light');
+                    });
+                }
+            });
+        }
+
+        // Redirect when clicking on a notification
+        document.querySelectorAll('.card').forEach(notification => {
+            notification.addEventListener('click', function() {
+                const actionUrl = this.getAttribute('data-action-url');
+                if (actionUrl) {
+                    window.location.href = actionUrl;
+                }
+            });
+        });
+    });
+</script>
 {% endblock %}
