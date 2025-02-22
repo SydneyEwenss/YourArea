@@ -1,0 +1,34 @@
+FROM python:3.13.2-alpine3.21
+
+ENV USER_NAME=yourarea
+ENV GROUP_NAME=yourarea
+ENV UID=1000
+ENV GID=1000
+ENV HOME_DIR=/home/${USER_NAME}
+ENV APP_NAME="YourArea"
+ENV APP_ROOT=/YourArea
+
+ENV PYTHONDONTWRITEBYTECODE=1
+
+ENV PYTHONUNBUFFERED=1
+
+RUN apk add --no-cache git
+
+RUN pip install --upgrade pip
+
+RUN pip3 install django pillow django-imagekit channels
+
+RUN pip3 install uvicorn uvicorn-worker gunicorn
+
+RUN addgroup --gid "$GID" "$GROUP_NAME"
+
+RUN adduser --uid 1000 -D -S -h ${HOME_DIR} -s /sbin/nologin -G ${GROUP_NAME} ${USER_NAME}
+
+RUN git clone --depth=1 https://github.com/SydneyEwenss/YourArea
+
+WORKDIR ${APP_ROOT}
+
+RUN chown -R ${USER_NAME}:${GROUP_NAME} /${APP_ROOT}
+
+USER ${USER_NAME}
+CMD gunicorn social.asgi:application -k uvicorn_worker.UvicornWorker
