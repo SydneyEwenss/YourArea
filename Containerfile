@@ -18,7 +18,7 @@ ENV PYTHONUNBUFFERED=1
 
 RUN pip install --upgrade pip
 
-RUN pip3 install django pillow django-imagekit channels
+RUN pip3 install django pillow django-imagekit channels dotenv
 
 RUN addgroup --gid "$GID" "$GROUP_NAME"
 

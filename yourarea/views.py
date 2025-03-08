@@ -13,6 +13,7 @@ from django.utils.encoding import force_bytes, force_str
 from django.contrib.sites.shortcuts import get_current_site
 from django.contrib.auth.tokens import default_token_generator
 from django.db.models import Count, F, Q, ExpressionWrapper, fields
+from django.db.models.functions import Extract
 from django.utils import timezone
 from datetime import timedelta
 from .models import Post, Profile, Comment
@@ -64,47 +65,46 @@ def home(request):
 
     return render(request, 'home.html', {'posts': page_obj, 'form': form})
 
+from django.db.models import Count, F, ExpressionWrapper, fields
+from django.db.models.functions import Extract
+from django.utils import timezone
+from django.core.paginator import Paginator
+
 def get_recommended_posts(user, page_number=1, page_size=10):
-    current_time = timezone.now()
+    current_time = timezone.now().timestamp()  # Convert current time to Unix timestamp
     user_interests = user.profile.interests.all()
 
     recommended_posts = Post.objects.filter(tags__in=user_interests).distinct()
     recommended_posts = recommended_posts.annotate(
         like_count=Count('likes__id'),
         recency_weight=ExpressionWrapper(
-            current_time - F('created'),
+            current_time - Extract(F('created'), 'epoch'),
             output_field=fields.FloatField()
         )
     ).annotate(
-        recency_seconds = F('recency_weight')
-    ).annotate(
-        score = F('like_count') * 3 - F('recency_seconds') * 0.1
+        score=F('like_count') * 3 - F('recency_weight') * 0.1
     )
 
     followed_users_posts = Post.objects.filter(user__profile__in=user.profile.follows.all()).distinct()
     followed_users_posts = followed_users_posts.annotate(
         like_count=Count('likes__id'),
         recency_weight=ExpressionWrapper(
-            current_time - F('created'),
+            current_time - Extract(F('created'), 'epoch'),
             output_field=fields.FloatField()
         )
     ).annotate(
-        recency_seconds = F('recency_weight')
-    ).annotate(
-        score = F('like_count') * 2 - F('recency_seconds') * 0.1
+        score=F('like_count') * 2 - F('recency_weight') * 0.1
     )
 
     followed_group_posts = Post.objects.filter(group__members=user).distinct()
     followed_group_posts = followed_group_posts.annotate(
         like_count=Count('likes__id'),
         recency_weight=ExpressionWrapper(
-            current_time - F('created'),
+            current_time - Extract(F('created'), 'epoch'),
             output_field=fields.FloatField()
         )
     ).annotate(
-        recency_seconds = F('recency_weight')
-    ).annotate(
-        score = F('like_count') * 1 - F('recency_seconds') * 0.1
+        score=F('like_count') * 1 - F('recency_weight') * 0.1
     )
 
     all_recommendations = recommended_posts | followed_users_posts | followed_group_posts
